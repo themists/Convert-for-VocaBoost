@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VocaBoost Data Structurer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #e2e8f0; }
+        .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
+        .counter-badge { @apply text-[10px] px-2 py-0.5 rounded-full font-mono font-bold; }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    <div class="max-w-5xl mx-auto">
+        <header class="mb-6 flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold text-blue-400">VocaBoost <span class="text-white">Data Structurer</span></h1>
+                <p class="text-slate-400 text-sm">리스트를 VocaBoost 표준 JSON 포맷으로 변환합니다.</p>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 gap-6">
+            <div class="glass p-6 rounded-xl shadow-lg grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-xs text-slate-500 mb-1">팩 제목</label>
+                    <input id="title" type="text" placeholder="예: 旅立ちの日に" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm focus:border-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-500 mb-1">카테고리</label>
+                    <input id="category" type="text" placeholder="예: J-POP" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm focus:border-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-500 mb-1">언어 코드</label>
+                    <select id="lang" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-sm outline-none">
+                        <option value="ja">일본어 (ja)</option>
+                        <option value="en">영어 (en)</option>
+                        <option value="es">스페인어 (es)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="glass p-4 rounded-xl">
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="text-xs text-slate-500 uppercase tracking-wider font-semibold">학습 언어 리스트 (Original)</label>
+                        <span id="oriCount" class="counter-badge bg-blue-900 text-blue-300 border border-blue-700">0 Lines</span>
+                    </div>
+                    <textarea id="originalText" oninput="updateCounts()" class="w-full h-64 bg-slate-900/50 border border-slate-700 rounded-lg p-3 text-sm font-mono focus:border-blue-500 outline-none" placeholder="한 줄에 한 문장씩..."></textarea>
+                </div>
+                <div class="glass p-4 rounded-xl">
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="text-xs text-slate-500 uppercase tracking-wider font-semibold">한글 번역 리스트 (Translation)</label>
+                        <span id="transCount" class="counter-badge bg-emerald-900 text-emerald-300 border border-emerald-700">0 Lines</span>
+                    </div>
+                    <textarea id="translationText" oninput="updateCounts()" class="w-full h-64 bg-slate-900/50 border border-slate-700 rounded-lg p-3 text-sm font-mono focus:border-blue-500 outline-none" placeholder="번역을 순서대로..."></textarea>
+                </div>
+            </div>
+
+            <div class="flex gap-4">
+                <button onclick="generateJSON()" class="flex-1 bg-blue-600 hover:bg-blue-500 py-3 rounded-xl font-bold transition-all shadow-lg shadow-blue-900/40">JSON 데이터 생성</button>
+                <button id="downloadBtn" onclick="downloadJSON()" disabled class="flex-1 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-600 py-3 rounded-xl font-bold transition-all">파일 저장 (.json)</button>
+            </div>
+
+            <div class="glass p-4 rounded-xl">
+                <div class="flex justify-between items-center mb-2">
+                    <label class="text-xs text-slate-500 uppercase font-semibold">JSON Preview</label>
+                    <span id="totalCount" class="text-xs text-blue-400 font-mono">Ready to convert</span>
+                </div>
+                <textarea id="jsonOutput" readonly class="w-full h-48 bg-black/30 border border-slate-700 rounded-lg p-4 text-xs font-mono text-emerald-400 outline-none"></textarea>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 텍스트를 정제하고 유효한 라인만 배열로 반환
+        function getCleanLines(id) {
+            const text = document.getElementById(id).value;
+            return text.split('\n')
+                .map(l => l.replace(/^\d+[\.\s]*/, '').trim()) // 숫자 넘버링 제거
+                .filter(l => l !== ""); // 빈 줄 제거
+        }
+
+        // 실시간 라인수 업데이트
+        function updateCounts() {
+            const oriLines = getCleanLines('originalText');
+            const transLines = getCleanLines('translationText');
+            
+            const oriBadge = document.getElementById('oriCount');
+            const transBadge = document.getElementById('transCount');
+
+            oriBadge.innerText = `${oriLines.length} Lines`;
+            transBadge.innerText = `${transLines.length} Lines`;
+
+            // 양쪽 숫자가 다르면 빨간색으로 강조
+            if (oriLines.length !== transLines.length && oriLines.length > 0 && transLines.length > 0) {
+                oriBadge.classList.replace('bg-blue-900', 'bg-red-900');
+                transBadge.classList.replace('bg-emerald-900', 'bg-red-900');
+                oriBadge.classList.replace('text-blue-300', 'text-red-300');
+                transBadge.classList.replace('text-emerald-300', 'text-red-300');
+            } else {
+                oriBadge.className = "counter-badge bg-blue-900 text-blue-300 border border-blue-700";
+                transBadge.className = "counter-badge bg-emerald-900 text-emerald-300 border border-emerald-700";
+            }
+        }
+
+        function generateJSON() {
+            const originals = getCleanLines('originalText');
+            const translations = getCleanLines('translationText');
+
+            if (originals.length === 0) {
+                alert("입력된 문장이 없습니다.");
+                return;
+            }
+
+            if (originals.length !== translations.length) {
+                alert(`매칭 오류: 원문(${originals.length}개)와 번역(${translations.length}개)의 수가 다릅니다. 라인수를 확인해주세요.`);
+                return;
+            }
+
+            const data = {
+                title: document.getElementById('title').value || "New Pack",
+                category: document.getElementById('category').value || "General",
+                lang: document.getElementById('lang').value,
+                level: 1,
+                type: "sentence",
+                sentences: originals.map((txt, i) => ({
+                    text: txt,
+                    translation: translations[i],
+                    unitNumber: 1,
+                    sortIndex: i + 1
+                }))
+            };
+
+            document.getElementById('jsonOutput').value = JSON.stringify(data, null, 2);
+            document.getElementById('totalCount').innerText = `Successfully converted ${originals.length} sentences`;
+            document.getElementById('downloadBtn').disabled = false;
+        }
+
+        function downloadJSON() {
+            const content = document.getElementById('jsonOutput').value;
+            const title = document.getElementById('title').value || 'voca_pack';
+            const blob = new Blob([content], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${title.replace(/\s+/g, '_')}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
